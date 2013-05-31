@@ -57,6 +57,8 @@ import org.saiku.olap.dto.SaikuMember;
 import org.saiku.olap.dto.SaikuQuery;
 import org.saiku.olap.dto.SaikuTag;
 import org.saiku.olap.dto.resultset.CellDataSet;
+import org.saiku.olap.query.IQuery;
+import org.saiku.olap.util.ObjectUtil;
 import org.saiku.olap.util.SaikuProperties;
 import org.saiku.olap.util.formatter.CellSetFormatter;
 import org.saiku.olap.util.formatter.FlattenedCellSetFormatter;
@@ -755,14 +757,25 @@ public class QueryResource {
 	@DELETE
 	@Produces({"application/json" })
 	@Path("/{queryname}/axis/{axis}")
-	public void deleteAxis(
+	public Response clearAxis(
 			@PathParam("queryname") String queryName, 
 			@PathParam("axis") String axisName)
 	{
-		if (log.isDebugEnabled()) {
-			log.debug("TRACK\t"  + "\t/query/" + queryName + "/axis/"+axisName+"\tDELETE");
+		try {
+			if (log.isDebugEnabled()) {
+				log.debug("TRACK\t"  + "\t/query/" + queryName + "/axis/"+axisName+"\tDELETE");
+			}
+			axisName = StringUtils.isNotBlank(axisName) ? axisName.toUpperCase() : null;
+			if (axisName != null) {
+				IQuery query = olapQueryService.clearAxis(queryName, axisName);
+				return Response.ok().entity(ObjectUtil.convert(query)).build();
+				
+			}
+			throw new Exception("Clear Axis: Axis name cannot be null");
+		} catch(Exception e) {
+			log.error("Cannot clear axis for query (" + queryName + ")",e);
+			return Response.serverError().entity(e.getMessage()).status(Status.INTERNAL_SERVER_ERROR).build();
 		}
-		olapQueryService.clearAxis(queryName, axisName);
 	}
 
 	@DELETE
@@ -779,16 +792,13 @@ public class QueryResource {
 	@PUT
 	@Produces({"application/json" })
 	@Path("/{queryname}/swapaxes")
-	public Status swapAxes(@PathParam("queryname") String queryName)	
+	public SaikuQuery swapAxes(@PathParam("queryname") String queryName)	
 	{
 		if (log.isDebugEnabled()) {
 			log.debug("TRACK\t"  + "\t/query/" + queryName + "/swapaxes\tPUT");
 		}
-		olapQueryService.clearSort(queryName, "ROWS");
-		olapQueryService.clearSort(queryName, "COLUMNS");
-		olapQueryService.swapAxes(queryName);
-		return Status.OK;
-
+		IQuery query = olapQueryService.swapAxes(queryName);
+		return ObjectUtil.convert(query);
 	}
 
 	@POST

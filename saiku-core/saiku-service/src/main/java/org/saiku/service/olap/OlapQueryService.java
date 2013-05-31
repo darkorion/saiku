@@ -131,9 +131,10 @@ public class OlapQueryService implements Serializable {
 
 	public SaikuQuery createNewOlapQuery(String name, String xml) {
 		try {
-			SaikuCube scube = QueryDeserializer.getFakeCube(xml);
+			QueryDeserializer qd = new QueryDeserializer();
+			SaikuCube scube = qd.getFakeCube(xml);
 			OlapConnection con = olapDiscoverService.getNativeConnection(scube.getConnectionName());
-			IQuery query = QueryDeserializer.unparse(xml, con);
+			IQuery query = qd.unparse(xml, con);
 			if (name == null) {
 				putIQuery(query.getName(), query);
 			}
@@ -249,7 +250,8 @@ public class OlapQueryService implements Serializable {
 	
 	private IQuery applyTag(IQuery query, OlapConnection con, SaikuTag t) throws Exception {
 		String xml = query.toXml();
-		query = QueryDeserializer.unparse(xml, con);
+		QueryDeserializer qd = new QueryDeserializer();
+		query = qd.unparse(xml, con);
 		
 		List<SaikuTupleDimension> doneDimension = new ArrayList<SaikuTupleDimension>();
 		Map<String,QueryDimension> dimensionMap = new HashMap<String,QueryDimension>();
@@ -529,8 +531,12 @@ public class OlapQueryService implements Serializable {
 
 	}
 
-	public void swapAxes(String queryName) {
-		getIQuery(queryName).swapAxes();
+	public IQuery swapAxes(String queryName) {
+		IQuery query = getIQuery(queryName);
+		if (QueryType.QM.equals(query.getType())) {
+			query.swapAxes();
+		}		
+		return query;
 	}
 	
 	public boolean includeChildren(String queryName, String dimensionName, String uniqueMemberName) {
@@ -747,14 +753,13 @@ public class OlapQueryService implements Serializable {
 		query.clearAllQuerySelections();
 	}
 
-	public void clearAxis(String queryName, String axisName) {
-		IQuery query = getIQuery(queryName);
-		if (Axis.Standard.valueOf(axisName) != null) {
-			QueryAxis qAxis = query.getAxis(Axis.Standard.valueOf(axisName));
-			query.resetAxisSelections(qAxis);
-			for (QueryDimension dim : qAxis.getDimensions()) {
-				qAxis.removeDimension(dim);
-			}
+	public IQuery clearAxis(String queryName, String axisName) {
+		try {
+			IQuery query = getIQuery(queryName);
+			query.clearAxis(axisName);
+			return query;
+		} catch (SaikuOlapException e) {
+			throw new SaikuServiceException("Cannot clear for query: " + queryName + " axis: " + axisName,e);
 		}
 	}
 
@@ -838,23 +843,7 @@ public class OlapQueryService implements Serializable {
 
 	public Properties getProperties(String queryName) {
 		IQuery query = getIQuery(queryName);
-		OlapConnection con = olapDiscoverService.getNativeConnection(query.getSaikuCube().getConnectionName());
 		Properties props = query.getProperties();
-		try {
-			con.createScenario();
-			if (query.getDimension("Scenario") != null) {
-				props.put("org.saiku.connection.scenario", Boolean.toString(true));
-			}
-			else {
-				props.put("org.saiku.connection.scenario", Boolean.toString(false));
-			}
-			props.put("org.saiku.query.explain", Boolean.toString(con.isWrapperFor(RolapConnection.class)));
-
-			
-		} catch (Exception e) {
-			props.put("org.saiku.connection.scenario", Boolean.toString(false));
-			props.put("org.saiku.query.explain", Boolean.toString(false));
-		}
 		return props;
 	}
 
